@@ -13,13 +13,23 @@ st.title("📊 HR Analytics & Employee Attrition Dashboard")
 
 # 2. Load Dataset
 @st.cache_data
-def load_data():
+st.sidebar.header("📁 Upload Custom Data")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload HR CSV file", 
+    type=["csv"],
+    help="Upload custom HR dataset or leave blank for default demo data."
+)
+
+@st.cache_data
+def load_data(file):
+    if file is not None:
+        return pd.read_csv(file)
     return pd.read_csv("HR_Analytics.csv")
 
 try:
-    df = load_data()
+    df = load_data(uploaded_file)
 except Exception as e:
-    st.error(f"Error loading file: {e}. Please ensure 'HR_Analytics.csv' is present in D:\\hr_dashboard folder.")
+    st.error(f"Error loading file: {e}")
     st.stop()
 
 # 3. Sidebar Filters
