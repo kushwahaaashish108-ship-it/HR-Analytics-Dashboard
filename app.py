@@ -12,7 +12,6 @@ st.set_page_config(
 st.title("📊 HR Analytics & Employee Attrition Dashboard")
 
 # 2. Load Dataset
-@st.cache_data
 st.sidebar.header("📁 Upload Custom Data")
 uploaded_file = st.sidebar.file_uploader(
     "Upload HR CSV file", 
@@ -31,7 +30,6 @@ try:
 except Exception as e:
     st.error(f"Error loading file: {e}")
     st.stop()
-
 # 3. Sidebar Filters
 st.sidebar.header("🔍 Filter Employees")
 
