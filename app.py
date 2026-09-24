@@ -4,9 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ============================================================
 # 1. PAGE CONFIGURATION
-# ============================================================
 st.set_page_config(
     page_title="HR Analytics & Financial Risk Dashboard",
     page_icon="📊",
@@ -15,25 +13,35 @@ st.set_page_config(
 
 st.title("📊 HR Analytics, Employee Value & Attrition Financial Impact")
 
-# ============================================================
-# 2. LOAD DATASET & FINANCIAL CALCULATIONS
-# ============================================================
+# 2. SIDEBAR FILE UPLOADER (DUAL-MODE INGESTION)
+st.sidebar.header("📁 Data Source")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Custom HR CSV",
+    type=["csv"],
+    help="Upload your own HR dataset or leave blank to use benchmark demo data."
+)
+
+# 3. LOAD DATASET & FINANCIAL CALCULATIONS
 @st.cache_data
-def load_data():
-    df = pd.read_csv("HR_Analytics.csv")
+def load_data(file):
+    if file is not None:
+        df = pd.read_csv(file)
+    else:
+        df = pd.read_csv("HR_Analytics.csv")
 
-    # Financial Modeling Logic:
-    # 1. Performance Multiplier (Rating 1-4 mapped to 2.5x - 4.0x)
+    # Financial Modeling Logic
     perf_multiplier = {1: 2.5, 2: 2.8, 3: 3.2, 4: 4.0}
-    df["Perf_Mult"] = df["PerformanceRating"].map(perf_multiplier).fillna(3.0)
+    if "PerformanceRating" in df.columns:
+        df["Perf_Mult"] = df["PerformanceRating"].map(perf_multiplier).fillna(3.0)
+    else:
+        df["Perf_Mult"] = 3.0
 
-    # 2. Annual Salary & Estimated Annual Revenue per Employee
-    df["Annual_Salary"] = df["MonthlyIncome"] * 12
+    if "MonthlyIncome" in df.columns:
+        df["Annual_Salary"] = df["MonthlyIncome"] * 12
+    else:
+        df["Annual_Salary"] = 60000 * 12
+
     df["Estimated_Revenue"] = df["Annual_Salary"] * df["Perf_Mult"]
-
-    # 3. Financial Loss Exposure on Exit:
-    # Replacement Cost = 25% of Annual CTC
-    # Vacancy Loss = 3 months of revenue productivity gap
     df["Replacement_Cost"] = df["Annual_Salary"] * 0.25
     df["Vacancy_Loss"] = df["Estimated_Revenue"] * (3.0 / 12.0)
     df["Total_Attrition_Loss"] = df["Replacement_Cost"] + df["Vacancy_Loss"]
@@ -41,70 +49,65 @@ def load_data():
     return df
 
 try:
-    df = load_data()
+    df = load_data(uploaded_file)
 except Exception as e:
-    st.error(f"Error loading file: {e}. Please ensure 'HR_Analytics.csv' is present in the same folder.")
+    st.error(f"Error loading file: {e}")
     st.stop()
 
-# ============================================================
-# 3. SIDEBAR FILTERS
-# ============================================================
+# 4. SIDEBAR DYNAMIC FILTERS
 st.sidebar.header("🔍 Filter Employees")
 
-dept_list = df["Department"].dropna().unique().tolist()
-selected_dept = st.sidebar.multiselect("Department:", dept_list, default=dept_list)
+dept_list = df["Department"].dropna().unique().tolist() if "Department" in df.columns else []
+selected_dept = st.sidebar.multiselect("Department:", dept_list, default=dept_list) if dept_list else []
 
-role_list = df["JobRole"].dropna().unique().tolist()
-selected_role = st.sidebar.multiselect("Job Role:", role_list, default=role_list)
+role_list = df["JobRole"].dropna().unique().tolist() if "JobRole" in df.columns else []
+selected_role = st.sidebar.multiselect("Job Role:", role_list, default=role_list) if role_list else []
 
-gender_list = df["Gender"].dropna().unique().tolist()
-selected_gender = st.sidebar.multiselect("Gender:", gender_list, default=gender_list)
+gender_list = df["Gender"].dropna().unique().tolist() if "Gender" in df.columns else []
+selected_gender = st.sidebar.multiselect("Gender:", gender_list, default=gender_list) if gender_list else []
 
-# Filter Data
-filtered_df = df[
-    (df["Department"].isin(selected_dept)) &
-    (df["JobRole"].isin(selected_role)) &
-    (df["Gender"].isin(selected_gender))
-]
+filtered_df = df.copy()
+if dept_list and selected_dept:
+    filtered_df = filtered_df[filtered_df["Department"].isin(selected_dept)]
+if role_list and selected_role:
+    filtered_df = filtered_df[filtered_df["JobRole"].isin(selected_role)]
+if gender_list and selected_gender:
+    filtered_df = filtered_df[filtered_df["Gender"].isin(selected_gender)]
 
-# ============================================================
-# 4. TOP KPI CARDS (WORKFORCE & FINANCIAL IMPACT)
-# ============================================================
+# 5. TOP EXECUTIVE KPI CARDS
 total_emp = len(filtered_df)
-attrition_df = filtered_df[filtered_df["Attrition"] == "Yes"]
+attrition_df = filtered_df[filtered_df["Attrition"] == "Yes"] if "Attrition" in filtered_df.columns else pd.DataFrame()
 attrition_count = len(attrition_df)
 attrition_rate = (attrition_count / total_emp * 100) if total_emp > 0 else 0
 
 total_revenue = filtered_df["Estimated_Revenue"].sum() if total_emp > 0 else 0
 total_at_risk_loss = filtered_df["Total_Attrition_Loss"].sum() if total_emp > 0 else 0
-actual_realized_loss = attrition_df["Total_Attrition_Loss"].sum() if len(attrition_df) > 0 else 0
 avg_loss_per_exit = filtered_df["Total_Attrition_Loss"].mean() if total_emp > 0 else 0
 
 st.markdown("### 📌 Workforce & Financial Key Performance Indicators")
-kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-kpi1.metric("Total Workforce", f"{total_emp:,}")
-kpi2.metric("Attrition Count", f"{attrition_count}", f"{attrition_rate:.1f}% rate", delta_color="inverse")
-kpi3.metric("Total Value Generated", f"₹{total_revenue/10000000:.2f} Cr")
-kpi4.metric("Total Loss Exposure", f"₹{total_at_risk_loss/10000000:.2f} Cr", delta="-Potential Risk", delta_color="inverse")
-kpi5.metric("Avg Loss / Exit", f"₹{avg_loss_per_exit/100000:.2f} L")
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("Total Workforce", f"{total_emp:,}")
+k2.metric("Attrition Count", f"{attrition_count}", f"{attrition_rate:.1f}% rate", delta_color="inverse")
+k3.metric("Total Value Generated", f"₹{total_revenue/10000000:.2f} Cr")
+k4.metric("Total Loss Exposure", f"₹{total_at_risk_loss/10000000:.2f} Cr", delta="-Potential Risk", delta_color="inverse")
+k5.metric("Avg Loss / Exit", f"₹{avg_loss_per_exit/100000:.2f} L")
 
 st.markdown("---")
 
-# ============================================================
-# 5. FINANCIAL RISK & REVENUE ANALYTICS (NEW FEATURE)
-# ============================================================
+# 6. EMPLOYEE REVENUE & FINANCIAL LOSS IMPACT CHARTS
 st.markdown("### 💼 Employee Revenue Generation & Attrition Financial Risk")
 f_c1, f_c2 = st.columns([1.2, 1], gap="medium")
 
 with f_c1:
+    hover_cols = [c for c in ["JobRole", "Department", "YearsAtCompany", "OverTime"] if c in filtered_df.columns]
     fig_scatter = px.scatter(
         filtered_df,
         x="Estimated_Revenue",
         y="Total_Attrition_Loss",
-        size="MonthlyIncome",
-        color="Attrition",
+        size="MonthlyIncome" if "MonthlyIncome" in filtered_df.columns else None,
+        color="Attrition" if "Attrition" in filtered_df.columns else None,
         color_discrete_map={"Yes": "#EF553B", "No": "#00CC96"},
-        hover_data=["JobRole", "Department", "YearsAtCompany", "OverTime"],
+        hover_data=hover_cols,
         title="Employee Value vs Exit Financial Loss Matrix",
         labels={
             "Estimated_Revenue": "Annual Revenue Value (₹)",
@@ -116,78 +119,77 @@ with f_c1:
     st.plotly_chart(fig_scatter, use_container_width=True)
 
 with f_c2:
-    dept_fin = filtered_df.groupby("Department")[["Estimated_Revenue", "Total_Attrition_Loss"]].sum().reset_index()
-    fig_bar = go.Figure(data=[
-        go.Bar(name='Revenue Generated', x=dept_fin['Department'], y=dept_fin['Estimated_Revenue'], marker_color='#3366CC'),
-        go.Bar(name='Attrition Loss Risk', x=dept_fin['Department'], y=dept_fin['Total_Attrition_Loss'], marker_color='#DC3912')
-    ])
-    fig_bar.update_layout(
-        barmode='group',
-        title="Department-wise Revenue vs Loss Exposure",
-        template='plotly_white',
-        height=420
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    if "Department" in filtered_df.columns:
+        dept_fin = filtered_df.groupby("Department")[["Estimated_Revenue", "Total_Attrition_Loss"]].sum().reset_index()
+        fig_bar = go.Figure(data=[
+            go.Bar(name='Revenue Generated', x=dept_fin['Department'], y=dept_fin['Estimated_Revenue'], marker_color='#3366CC'),
+            go.Bar(name='Attrition Loss Risk', x=dept_fin['Department'], y=dept_fin['Total_Attrition_Loss'], marker_color='#DC3912')
+        ])
+        fig_bar.update_layout(
+            barmode='group',
+            title="Department-wise Revenue vs Loss Exposure",
+            template='plotly_white',
+            height=420
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("---")
 
-# ============================================================
-# 6. ATTRITION PATTERN CHARTS (EXISTING)
-# ============================================================
+# 7. WORKFORCE DEMOGRAPHICS CHARTS
 st.markdown("### 📊 Workforce Demographics & Attrition Drivers")
 c1, c2 = st.columns(2)
 
 with c1:
-    fig_dept = px.histogram(
-        filtered_df, x="Department", color="Attrition",
-        barmode="group", title="Attrition by Department",
-        color_discrete_map={"Yes": "#EF553B", "No": "#636EFA"}
-    )
-    st.plotly_chart(fig_dept, use_container_width=True)
+    if "Department" in filtered_df.columns and "Attrition" in filtered_df.columns:
+        fig_dept = px.histogram(
+            filtered_df, x="Department", color="Attrition",
+            barmode="group", title="Attrition by Department",
+            color_discrete_map={"Yes": "#EF553B", "No": "#636EFA"}
+        )
+        st.plotly_chart(fig_dept, use_container_width=True)
 
 with c2:
-    fig_ot = px.pie(
-        attrition_df, names="OverTime",
-        title="Attrition Impact by Overtime Status",
-        hole=0.45,
-        color_discrete_sequence=px.colors.sequential.RdBu
-    )
-    st.plotly_chart(fig_ot, use_container_width=True)
+    if "OverTime" in attrition_df.columns and len(attrition_df) > 0:
+        fig_ot = px.pie(
+            attrition_df, names="OverTime",
+            title="Attrition Impact by Overtime Status",
+            hole=0.45,
+            color_discrete_sequence=px.colors.sequential.RdBu
+        )
+        st.plotly_chart(fig_ot, use_container_width=True)
 
 c3, c4 = st.columns(2)
 
 with c3:
-    fig_salary = px.box(
-        filtered_df, x="JobRole", y="MonthlyIncome", color="Attrition",
-        title="Salary Distribution Across Job Roles",
-        color_discrete_map={"Yes": "#EF553B", "No": "#636EFA"}
-    )
-    fig_salary.update_layout(xaxis_tickangle=-45)
-    st.plotly_chart(fig_salary, use_container_width=True)
+    if "JobRole" in filtered_df.columns and "MonthlyIncome" in filtered_df.columns:
+        fig_salary = px.box(
+            filtered_df, x="JobRole", y="MonthlyIncome", color="Attrition" if "Attrition" in filtered_df.columns else None,
+            title="Salary Distribution Across Job Roles",
+            color_discrete_map={"Yes": "#EF553B", "No": "#636EFA"}
+        )
+        fig_salary.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig_salary, use_container_width=True)
 
 with c4:
-    fig_age = px.histogram(
-        filtered_df, x="Age", color="Attrition",
-        nbins=25, title="Age Distribution vs Attrition",
-        color_discrete_map={"Yes": "#EF553B", "No": "#636EFA"}
-    )
-    st.plotly_chart(fig_age, use_container_width=True)
+    if "Age" in filtered_df.columns:
+        fig_age = px.histogram(
+            filtered_df, x="Age", color="Attrition" if "Attrition" in filtered_df.columns else None,
+            nbins=25, title="Age Distribution vs Attrition",
+            color_discrete_map={"Yes": "#EF553B", "No": "#636EFA"}
+        )
+        st.plotly_chart(fig_age, use_container_width=True)
 
-# ============================================================
-# 7. HIGH IMPACT EMPLOYEE RISK AUDIT TABLE
-# ============================================================
+# 8. TOP 10 CRITICAL EMPLOYEES AUDIT TABLE
 st.markdown("---")
 st.markdown("### 🚨 Top 10 Critical Employees by Financial Loss Impact")
 
-audit_cols = [
-    "Department", "JobRole", "MonthlyIncome", "PerformanceRating",
-    "Estimated_Revenue", "Total_Attrition_Loss", "Attrition"
-]
-
-audit_table = filtered_df[audit_cols].sort_values("Total_Attrition_Loss", ascending=False).head(10).copy()
-
-audit_table["MonthlyIncome"] = audit_table["MonthlyIncome"].apply(lambda x: f"₹{x:,.0f}")
-audit_table["Estimated_Revenue"] = audit_table["Estimated_Revenue"].apply(lambda x: f"₹{x:,.0f}")
-audit_table["Total_Attrition_Loss"] = audit_table["Total_Attrition_Loss"].apply(lambda x: f"₹{x:,.0f}")
-
-st.dataframe(audit_table, use_container_width=True, hide_index=True)
+audit_cols = [c for c in ["Department", "JobRole", "MonthlyIncome", "PerformanceRating", "Estimated_Revenue", "Total_Attrition_Loss", "Attrition"] if c in filtered_df.columns]
+if audit_cols:
+    audit_table = filtered_df[audit_cols].sort_values("Total_Attrition_Loss", ascending=False).head(10).copy()
+    if "MonthlyIncome" in audit_table.columns:
+        audit_table["MonthlyIncome"] = audit_table["MonthlyIncome"].apply(lambda x: f"₹{x:,.0f}")
+    if "Estimated_Revenue" in audit_table.columns:
+        audit_table["Estimated_Revenue"] = audit_table["Estimated_Revenue"].apply(lambda x: f"₹{x:,.0f}")
+    if "Total_Attrition_Loss" in audit_table.columns:
+        audit_table["Total_Attrition_Loss"] = audit_table["Total_Attrition_Loss"].apply(lambda x: f"₹{x:,.0f}")
+    st.dataframe(audit_table, use_container_width=True, hide_index=True)
