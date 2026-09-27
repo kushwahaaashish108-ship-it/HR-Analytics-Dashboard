@@ -236,6 +236,27 @@ st.markdown("""
         box-shadow: 0 0 12px rgba(56, 189, 248, 0.8), inset 0 0 6px rgba(56, 189, 248, 0.2) !important;
         cursor: pointer;
     }
+
+    /* RETURN BUTTON: EXACT UPLOAD SIZE & NEO-BLUE GLOW */
+    section[data-testid="stSidebar"] div.stButton > button {
+        width: 100% !important;
+        background: transparent !important;
+        border: 1.5px solid rgba(56, 189, 248, 0.45) !important;
+        border-radius: 8px !important;
+        color: #F8FAFC !important;
+        font-weight: 600 !important;
+        font-size: 13.5px !important;
+        padding: 10px 16px !important;
+        box-shadow: 0 0 6px rgba(56, 189, 248, 0.15) !important;
+        transition: all 0.25s ease !important;
+    }
+    section[data-testid="stSidebar"] div.stButton > button:hover {
+        background: rgba(56, 189, 248, 0.05) !important;
+        border: 1.5px solid #38BDF8 !important;
+        color: #38BDF8 !important;
+        box-shadow: 0 0 14px rgba(56, 189, 248, 0.8), inset 0 0 8px rgba(56, 189, 248, 0.2) !important;
+        transform: translateY(-1px) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
