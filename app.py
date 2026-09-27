@@ -240,12 +240,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. SCHEMA-AGNOSTIC MULTI-FORMAT FILE UPLOADER
+if "uploader_key" not in st.session_state:
+    st.session_state["uploader_key"] = 0
+
 st.sidebar.markdown("### Enterprise Data Gateway")
 uploaded_file = st.sidebar.file_uploader(
     "Upload Workforce Records (CSV / Excel)",
     type=["csv", "xlsx", "xls"],
+    key=f"uploader_{st.session_state['uploader_key']}",
     label_visibility="visible"
 )
+
+# File aate hi Return / Reset button display hoga
+if uploaded_file is not None:
+    if st.sidebar.button("↩ Return to Default Dashboard"):
+        st.session_state["uploader_key"] += 1
+        st.rerun()
 
 def find_matching_column(columns, candidates):
     cols_clean = {c.lower().replace("_", "").replace(" ", ""): c for c in columns}
